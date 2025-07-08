@@ -7,6 +7,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
+from torch.distributions import Normal
 
 from rsl_rl_ts.modules import ActorCritic
 from rsl_rl_ts.storage import RolloutStorage
@@ -155,12 +156,38 @@ class PPO:
             # value_batch = self.actor_critic.evaluate(
             #     critic_obs_batch, masks=masks_batch, hidden_states=hid_states_batch[1]
             # )
+
+             # ────────────────────────────────────────────────
+            # 1) SANITIZE all observation inputs
+            obs_batch            = torch.nan_to_num(obs_batch,            nan=0.0, posinf=0.0, neginf=0.0)
+            privileged_obs_batch = torch.nan_to_num(privileged_obs_batch, nan=0.0, posinf=0.0, neginf=0.0)
+            critic_obs_batch     = torch.nan_to_num(critic_obs_batch,     nan=0.0, posinf=0.0, neginf=0.0)
+
+            # ────────────────────────────────────────────────
+            # 2) Forward pass through actor‐critic
             self.actor_critic.act(obs_batch, privileged_obs_batch, masks=masks_batch)
             actions_log_prob_batch = self.actor_critic.get_actions_log_prob(actions_batch)
-            value_batch = self.actor_critic.evaluate(critic_obs_batch, privileged_obs_batch, masks=masks_batch)
-            mu_batch = self.actor_critic.action_mean
+            value_batch = self.actor_critic.evaluate(
+                critic_obs_batch, privileged_obs_batch, masks=masks_batch
+            )
+            mu_batch    = self.actor_critic.action_mean
             sigma_batch = self.actor_critic.action_std
             entropy_batch = self.actor_critic.entropy
+
+            # ────────────────────────────────────────────────
+            # 3) SANITIZE the distribution parameters before any KL / surrogate loss
+            dist = self.actor_critic.distribution
+            loc   = torch.nan_to_num(dist.mean,   nan=0.0, posinf=0.0, neginf=0.0)
+            scale = torch.nan_to_num(dist.stddev, nan=1e-3, posinf=1e-3, neginf=1e-3)
+            # rebuild a clean Normal
+            self.actor_critic.distribution = Normal(loc, scale)
+
+            # self.actor_critic.act(obs_batch, privileged_obs_batch, masks=masks_batch)
+            # actions_log_prob_batch = self.actor_critic.get_actions_log_prob(actions_batch)
+            # value_batch = self.actor_critic.evaluate(critic_obs_batch, privileged_obs_batch, masks=masks_batch)
+            # mu_batch = self.actor_critic.action_mean
+            # sigma_batch = self.actor_critic.action_std
+            # entropy_batch = self.actor_critic.entropy
 
             # KL
             if self.desired_kl is not None and self.schedule == "adaptive":

@@ -139,6 +139,7 @@ class ActorCritic(nn.Module):
         print(f"Adaptation Module: {self.adaptation_module}")
         print(f"Actor MLP: {self.actor}")
         print(f"Critic MLP: {self.critic}")
+        # breakpoint()
 
         # Action noise
         self.std = nn.Parameter(init_noise_std * torch.ones(num_actions))
@@ -177,14 +178,24 @@ class ActorCritic(nn.Module):
         return self.distribution.entropy().sum(dim=-1)
     
     def update_distribution(self, observations, privileged_observations): #Teacher
-        # print("privileged_observations ", privileged_observations.shape) #privileged_observations  torch.Size([2048, 4])
-        # breakpoint()
+        # latent = self.env_factor_encoder(privileged_observations)
+        # mean = self.actor(torch.cat((observations, latent), dim=-1))
+        # self.distribution = Normal(mean, mean * 0. + self.std)
+
+        # encode any privileged information
         latent = self.env_factor_encoder(privileged_observations)
-        # print("latent ", latent.shape)
-        # print("observations ", observations.shape)
-        # breakpoint()
+
+        # 1) compute raw policy mean
         mean = self.actor(torch.cat((observations, latent), dim=-1))
-        self.distribution = Normal(mean, mean * 0. + self.std)
+
+        # 2) sanitize the mean: zero out NaN/±Inf
+        mean = torch.nan_to_num(mean, nan=0.0, posinf=0.0, neginf=0.0)
+
+        # 3) sanitize the scale (std): ensure it's finite and at least a small epsilon
+        std = torch.nan_to_num(self.std, nan=1e-3, posinf=1e-3, neginf=1e-3)
+
+        # 4) rebuild the distribution with clean parameters
+        self.distribution = Normal(mean, std)
 
     def act(self, observations, privileged_observations, **kwargs): #2 inputs
         self.update_distribution(observations, privileged_observations) #2 inputs
@@ -223,6 +234,10 @@ class ActorCritic(nn.Module):
         latent = self.env_factor_encoder(privileged_observations)
         # print("latent shape ", latent.shape)
         # print("critic obs shape ", critic_observations.shape) #torch.Size([4096, 243])
+        # print("critic_observations shape:", critic_observations.shape)
+        # print("latent shape:", latent.shape)
+        # print("Concatenated shape:", torch.cat((critic_observations, latent), dim=-1).shape)
+        # breakpoint()
         value = self.critic(torch.cat((critic_observations, latent), dim=-1)) #critic
         # print("value ", value)
         # breakpoint()

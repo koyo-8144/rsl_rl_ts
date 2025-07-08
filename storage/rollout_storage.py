@@ -165,11 +165,12 @@ class RolloutStorage:
         indices = torch.randperm(num_mini_batches * mini_batch_size, requires_grad=False, device=self.device)
 
         observations = self.observations.flatten(0, 1)
-        if self.critic_observations is not None:
-            critic_observations = self.critic_observations.flatten(0, 1)
-        else:
-            critic_observations = observations
-        critic_observations = observations
+        # if self.critic_observations is not None:
+        #     critic_observations = self.critic_observations.flatten(0, 1)
+        # else:
+        #     critic_observations = observations
+        # critic_observations = observations
+        critic_observations = self.critic_observations.flatten(0, 1)
         
         privileged_obs = self.privileged_observations.flatten(0, 1)
         obs_history = self.observation_histories.flatten(0, 1)
