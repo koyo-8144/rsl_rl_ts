@@ -104,6 +104,7 @@ class OnPolicyRunner:
         self.current_learning_iteration = 0
         self.git_status_repos = [rsl_rl_ts.__file__]
 
+
     def learn(self, num_learning_iterations: int, init_at_random_ep_len: bool = False):
         # initialize writer
         if self.log_dir is not None and self.writer is None:
@@ -265,6 +266,8 @@ class OnPolicyRunner:
         # torch.save(self.alg.actor_critic.adaptation_module.state_dict(), os.path.join(self.log_dir, f"adaptation_module_{self.current_learning_iteration}.pt"))
         #self.save(os.path.join(self.log_dir, f"adaptation_module_{self.current_learning_iteration}.pt"))
 
+        metric = statistics.mean(rewbuffer) if len(rewbuffer) > 0 else 0.0
+        return float(metric)
 
     def log(self, locs: dict, width: int = 80, pad: int = 35):
         self.tot_timesteps += self.num_steps_per_env * self.env.num_envs
